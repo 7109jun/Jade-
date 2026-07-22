@@ -1,4 +1,4 @@
-#  Jade Protocol
+#  Jade Protocol 약자 Jake Jun a Korean Fried chicken Devour End
 
 > **XML의 끔찍한 태그(`< >`)를 없애기 위해 탄생한 데이터 포맷**  
 > *Simple. Readable. Happy.* 
