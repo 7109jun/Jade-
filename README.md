@@ -4,7 +4,7 @@
 > *Simple. Readable. Happy.* 
 
 ![Jade Logo](https://placehold.co/600x200/FFD700/FFFFFF?text=Jade+Protocol+%F0%9F%98%8A)  
-*(노란색 배경에 하얀 스마일 로고 컨셉)*
+*(로고)*
 
 ---
 
