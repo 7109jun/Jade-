@@ -5,7 +5,7 @@ All documentation, syntax specification, and example files
 (README.md, Jade.md, examples/) are licensed under 
 Creative Commons Attribution 4.0 International.
 
-You MUST give appropriate credit to "Jake Jun", provide a link 
+You MUST give appropriate credit to "7109jun", provide a link 
 to the original repository, and indicate if changes were made.
 Full license: https://creativecommons.org/licenses/by/4.0/
 
