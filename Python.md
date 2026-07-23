@@ -11,17 +11,16 @@ class Jade:
     _BOOL_NULL_REGEX = re.compile(r'^<([a-zA-Z_][a-zA-Z0-9_-]*)>([/;]?)$')
 
     # ==========================================
-    # 📥 파싱: Jade ➔ Python Dict (AI Output -> Internal Data)
+    # 📥 파싱: Jade ➔ Python Dict
     # ==========================================
     @classmethod
     def loads(cls, jade_str: str) -> Dict[str, Any]:
         lines = jade_str.splitlines()
         cleaned_lines: List[Tuple[int, int, str]] = []
 
-        # 1. AI 출력을 위한 초고속 전처리 (O(N) 단일 패스)
         for line_num, raw_line in enumerate(lines, 1):
             if '\t' in raw_line:
-                raise JadeParseError(f"[Line {line_num}] Tab characters are prohibited in Jade. Use 4 spaces.")
+                raise JadeParseError(f"[Line {line_num}] 탭(Tab) 문자는 금지됩니다. 공백 4칸을 사용하세요.")
             
             line = cls._strip_comment(raw_line)
             stripped = line.strip()
@@ -29,10 +28,9 @@ class Jade:
             if not stripped:
                 continue
 
-            # 들여쓰기 공백 검증
             indent = len(line) - len(line.lstrip(' '))
             if indent % 4 != 0:
-                raise JadeParseError(f"[Line {line_num}] Indentation must be exactly a multiple of 4 spaces. (Got {indent})")
+                raise JadeParseError(f"[Line {line_num}] 들여쓰기는 정확히 공백 4칸 단위여야 합니다. (현재: {indent}칸)")
 
             cleaned_lines.append((line_num, indent // 4, stripped))
 
@@ -45,14 +43,13 @@ class Jade:
         i = 0
         total_lines = len(cleaned_lines)
 
-        # 2. 결정론적(Deterministic) 스택 파서 Loop
         while i < total_lines:
             line_num, level, text = cleaned_lines[i]
 
-            # A. 블록 마감(.) 처리
+            # A. 블록 마감(.) 처리 (객체 블록만 마감)
             if text == '.':
                 if len(stack) <= 1:
-                    raise JadeParseError(f"[Line {line_num}] Unexpected block closure '.'")
+                    raise JadeParseError(f"[Line {line_num}] 상위 블록이 존재하지 않는 잘못된 마침표('.')입니다.")
                 
                 while len(stack) > 1 and stack[-1][1] >= level:
                     stack.pop()
@@ -82,7 +79,7 @@ class Jade:
             # D. 배열 요소 (- value)
             if text.startswith('- '):
                 if curr_type != 'array':
-                    raise JadeParseError(f"[Line {line_num}] Array item '-' cannot be placed in an object block.")
+                    raise JadeParseError(f"[Line {line_num}] 객체 블록 내에서 직접 '-' 배열 구문을 작성할 수 없습니다.")
                 
                 val_str = text[2:].strip()
                 curr_container.append(cls._parse_value(val_str))
@@ -94,10 +91,9 @@ class Jade:
                 key, val_str = map(str.strip, text.split(':', 1))
                 
                 if not cls._KEY_REGEX.match(key):
-                    raise JadeParseError(f"[Line {line_num}] Invalid key name '{key}'.")
+                    raise JadeParseError(f"[Line {line_num}] 유효하지 않은 키 이름 '{key}' 입니다.")
 
                 if val_str == '':
-                    # 자식 블록(Object/Array) 유효성 탐색
                     if i + 1 < total_lines:
                         _, next_level, next_text = cleaned_lines[i + 1]
                         if next_level == level + 1:
@@ -112,26 +108,26 @@ class Jade:
                                 
                             stack.append((new_container, level + 1, new_type))
                         else:
-                            raise JadeParseError(f"[Line {line_num}] Block key '{key}' has invalid child indentation.")
+                            raise JadeParseError(f"[Line {line_num}] 블록 선언 키 '{key}' 다음 줄의 들여쓰기가 올바르지 않습니다.")
                     else:
-                        raise JadeParseError(f"[Line {line_num}] Unclosed block key '{key}' at EOF.")
+                        raise JadeParseError(f"[Line {line_num}] 파일 끝에 닫히지 않은 블록 키 '{key}'가 있습니다.")
                 else:
                     if curr_type == 'object':
                         curr_container[key] = cls._parse_value(val_str)
                     else:
-                        raise JadeParseError(f"[Line {line_num}] Direct key:value syntax is forbidden inside primitive arrays.")
+                        raise JadeParseError(f"[Line {line_num}] 배열 내부에 direct key:value 선언은 불가능합니다.")
                 i += 1
                 continue
 
-            raise JadeParseError(f"[Line {line_num}] Unparseable syntax: '{text}'")
+            raise JadeParseError(f"[Line {line_num}] 문법 오류: '{text}'")
 
         if len(stack) > 1:
-            raise JadeParseError("Unclosed Jade block (missing '.') before EOF.")
+            raise JadeParseError("파일 끝(EOF)에 도달했으나 마감되지 않은 객체 블록('.')이 존재합니다.")
 
         return root
 
     # ==========================================
-    # 📤 직렬화: Python Dict ➔ Jade (Internal Data -> AI Prompt)
+    # 📤 직렬화: Python Dict ➔ Jade (배열 마감 마침표 버그 수정)
     # ==========================================
     @classmethod
     def dumps(cls, data: Union[Dict, List], indent_level: int = 0) -> str:
@@ -144,10 +140,15 @@ class Jade:
                     lines.append(f"{indent}<{key}>/" if val else f"{indent}<{key}>")
                 elif val is None:
                     lines.append(f"{indent}<{key}>;")
-                elif isinstance(val, (dict, list)):
+                elif isinstance(val, dict):
+                    # 객체(Dict) 블록만 마침표(.)로 닫음
                     lines.append(f"{indent}{key} :")
                     lines.append(cls.dumps(val, indent_level + 1))
                     lines.append(f"{indent}.")
+                elif isinstance(val, list):
+                    # 리스트(Array) 블록은 마침표(.)를 붙이지 않음!
+                    lines.append(f"{indent}{key} :")
+                    lines.append(cls.dumps(val, indent_level + 1))
                 else:
                     val_str = cls._format_value(val)
                     lines.append(f"{indent}{key} : {val_str}")
@@ -169,7 +170,7 @@ class Jade:
         return "\n".join(lines)
 
     # ==========================================
-    # 🛠️ AI 통신용 최적화 헬퍼 메서드
+    # 🛠️ 최적화 헬퍼 메서드
     # ==========================================
     @staticmethod
     def _strip_comment(line: str) -> str:
@@ -219,7 +220,6 @@ class Jade:
     @staticmethod
     def _format_value(val: Any) -> str:
         if isinstance(val, str):
-            # 개행문자 및 특수문자가 있을 경우 안전 이스케이프 감싸기
             if any(c in val for c in (':', '.', '-', '#', '<', '>', '"', "'", ' ', '\n')):
                 escaped = val.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
                 return f'"{escaped}"'
@@ -227,7 +227,7 @@ class Jade:
         return str(val)
 
     # ==========================================
-    # 🔌 AI 파이프라인 유틸리티 APIs
+    # 🔌 API 인터페이스
     # ==========================================
     @classmethod
     def jade_to_json(cls, jade_str: str, indent: int = 2) -> str:
