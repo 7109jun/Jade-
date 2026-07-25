@@ -244,4 +244,4 @@ class Jade:
             cls.loads(jade_str)
             return {"valid": True, "error": None}
         except JadeParseError as e:
-            return {"valid": False, "error": str(e)}```
+            return {"valid": False, "error": str(e)}
